@@ -1,7 +1,8 @@
 // File: src/screens/CitizenDashboardScreen.js (UPDATED)
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useApp } from "./AppContext";
 
 // Import Citizen Screens:
 import ReporterScreen from "./ReporterScreen";
@@ -9,17 +10,61 @@ import SafeRouteMapScreen from "./SafeRouteMapScreen";
 import HazardMapScreen from "./HazardMapScreen";
 
 export default function CitizenDashboardScreen({ name, onBack }) {
-  const [activeTab, setActiveTab] = useState("Reporter"); // 'Reporter', 'SafeRoute', or 'HazardMap'
+  const [activeTab, setActiveTab] = useState("Reporter");
+  const { getNotifications, markNotificationAsRead } = useApp();
+  const previousNotificationCount = useRef(0);
+
+  // Debug log to verify name prop
+  console.log('=== CITIZEN DASHBOARD ===');
+  console.log('name prop received:', name);
+
+  // Check for new notifications
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const notifications = getNotifications(name);
+      const unreadNotifications = notifications.filter((n) => !n.read);
+      
+      // Check if we have NEW unread notifications
+      if (unreadNotifications.length > previousNotificationCount.current) {
+        // Get the newest notification
+        const newestNotification = unreadNotifications[unreadNotifications.length - 1];
+        
+        // Show alert
+        Alert.alert(
+          "Report Acknowledged!",
+          newestNotification.message,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                markNotificationAsRead(name, newestNotification.id);
+              }
+            }
+          ]
+        );
+        
+        // Update the count
+        previousNotificationCount.current = unreadNotifications.length;
+      } else {
+        // Just update the count if it decreased (notifications were read)
+        previousNotificationCount.current = unreadNotifications.length;
+      }
+    }, 500); // Check every 500ms
+
+    return () => clearInterval(interval);
+  }, [name, getNotifications, markNotificationAsRead]);
 
   // Function to render the active screen
   const renderScreen = () => {
-    // The onBack prop passed to these screens is used to return to the tab view.
-    // Since this is the main dashboard, we'll pass a no-op function.
     const internalBack = () => {};
+
+    console.log('=== RENDER SCREEN ===');
+    console.log('Rendering tab:', activeTab);
+    console.log('name value:', name);
 
     switch (activeTab) {
       case "Reporter":
-        return <ReporterScreen onBack={internalBack} />;
+        return <ReporterScreen onBack={internalBack} userName={name} />;
       case "SafeRoute":
         return <SafeRouteMapScreen onBack={internalBack} />;
       case "HazardMap":
@@ -29,6 +74,10 @@ export default function CitizenDashboardScreen({ name, onBack }) {
     }
   };
 
+  // Get unread notification count
+  const notifications = getNotifications(name);
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   return (
     <View style={styles.container}>
       {/* GLOBAL HEADER/NAVIGATION */}
@@ -37,9 +86,20 @@ export default function CitizenDashboardScreen({ name, onBack }) {
           <Text style={styles.welcomeText}>Hello, {name}</Text>
           <Text style={styles.roleText}>Citizen Portal</Text>
         </View>
-        <TouchableOpacity onPress={onBack} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          {/* Notification Badge */}
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Ionicons name="notifications" size={20} color="#0ea5e9" />
+              <View style={styles.badgeCount}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
+              </View>
+            </View>
+          )}
+          <TouchableOpacity onPress={onBack} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* TAB NAVIGATION */}
@@ -101,6 +161,30 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1 },
   welcomeText: { fontSize: 16, fontWeight: "500", color: "#475569" },
   roleText: { fontSize: 24, fontWeight: "bold", color: "#1f2937" },
+  
+  notificationBadge: {
+    position: "relative",
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#e0f2fe",
+  },
+  badgeCount: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  badgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+
   logoutButton: {
     padding: 10,
     borderRadius: 10,

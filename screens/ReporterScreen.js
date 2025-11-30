@@ -12,18 +12,32 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "./AppContext";
 
-export default function ReporterScreen({ onBack }) {
+export default function ReporterScreen({ onBack, userName }) {
   const { sendSos } = useApp();
   const [location, setLocation] = useState("");
   const [type, setType] = useState("Medical");
   const [description, setDescription] = useState("");
   const [need, setNeed] = useState("Immediate Transport");
 
+  // Debug log to check if userName is received
+  console.log('=== REPORTER SCREEN ===');
+  console.log('userName prop:', userName);
+
   function submit() {
     if (!location.trim() || !description.trim())
       return Alert.alert("Missing Fields", "Please fill out all required fields.");
 
-    sendSos({ type, location, description, need, reporter: "Citizen (Device)" });
+    console.log('=== SENDING SOS ===');
+    console.log('reporterName being sent:', userName);
+
+    sendSos({ 
+      type, 
+      location, 
+      description, 
+      need, 
+      reporter: "Citizen (Device)",
+      reporterName: userName // Pass the current user's name
+    });
 
     Alert.alert("SOS Sent", "Your emergency request has been broadcast.");
     setLocation("");

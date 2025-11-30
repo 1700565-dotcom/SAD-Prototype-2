@@ -21,6 +21,9 @@ export function AppProvider({ children }) {
   // SOS + Orders
   const [sosList, setSosList] = useState([]);
   const [orders, setOrders] = useState([]);
+  
+  // Notifications for users
+  const [notifications, setNotifications] = useState({});
 
   // Seed sample SOS items
   useEffect(() => {
@@ -31,6 +34,7 @@ export function AppProvider({ children }) {
       description: 'Person collapsed near market.',
       need: 'Immediate Transport',
       reporter: 'Citizen (Device)',
+      reporterName: null, // No specific user for seed data
       timestamp: Date.now() - 1000 * 60 * 60,
       status: 'incoming',
     };
@@ -42,6 +46,7 @@ export function AppProvider({ children }) {
       description: 'Example validated case',
       need: 'Medical Aid',
       reporter: 'Citizen (Device)',
+      reporterName: null,
       timestamp: Date.now() - 1000 * 60 * 10,
       status: 'validated',
     };
@@ -75,8 +80,11 @@ export function AppProvider({ children }) {
     };
   }
 
-  // Citizen sends SOS
-  function sendSos({ type, location, description, need, reporter }) {
+  // Citizen sends SOS - NOW INCLUDES reporterName
+  function sendSos({ type, location, description, need, reporter, reporterName }) {
+    console.log('=== SEND SOS DEBUG ===');
+    console.log('reporterName received:', reporterName);
+    
     const s = {
       id: genId(),
       type,
@@ -84,9 +92,12 @@ export function AppProvider({ children }) {
       description,
       need,
       reporter,
+      reporterName, // Track which user sent this
       timestamp: Date.now(),
       status: 'incoming',
     };
+    
+    console.log('SOS object created:', s);
     setSosList((p) => [s, ...p]);
     return s;
   }
@@ -117,14 +128,72 @@ export function AppProvider({ children }) {
     );
   }
 
-  // Admin acknowledges SOS
+  // Admin/Responder acknowledges SOS - NOW CREATES NOTIFICATION
   function acknowledgeSos(id) {
+    const sos = sosList.find((s) => s.id === id);
+    
+    console.log('=== ACKNOWLEDGE SOS DEBUG ===');
+    console.log('SOS ID:', id);
+    console.log('SOS Found:', sos);
+    console.log('Reporter Name:', sos?.reporterName);
+    
     setSosList((p) =>
       p.map((s) =>
         s.id === id ? { ...s, status: 'acknowledged' } : s
       )
     );
-    console.log(`Citizen notified for SOS ID: ${id}`);
+    
+    // Create notification for the specific user who reported
+    if (sos && sos.reporterName) {
+      const notificationId = genId();
+      const newNotification = {
+        id: notificationId,
+        sosId: id,
+        message: `Your ${sos.type} report at ${sos.location} has been acknowledged by responders.`,
+        timestamp: Date.now(),
+        read: false,
+      };
+      
+      setNotifications((prev) => {
+        const updated = {
+          ...prev,
+          [sos.reporterName]: [
+            ...(prev[sos.reporterName] || []),
+            newNotification
+          ]
+        };
+        console.log('Updated notifications:', updated);
+        return updated;
+      });
+      
+      console.log(`✅ Citizen ${sos.reporterName} notified for SOS ID: ${id}`);
+      console.log('Notification created:', newNotification);
+    } else {
+      console.log('⚠️ No notification created - missing reporter name');
+    }
+  }
+
+  // Get notifications for a specific user
+  function getNotifications(userName) {
+    return notifications[userName] || [];
+  }
+
+  // Mark notification as read
+  function markNotificationAsRead(userName, notificationId) {
+    setNotifications((prev) => ({
+      ...prev,
+      [userName]: (prev[userName] || []).map((n) =>
+        n.id === notificationId ? { ...n, read: true } : n
+      )
+    }));
+  }
+
+  // Clear all notifications for a user
+  function clearNotifications(userName) {
+    setNotifications((prev) => ({
+      ...prev,
+      [userName]: []
+    }));
   }
 
   return (
@@ -139,6 +208,9 @@ export function AppProvider({ children }) {
         dismissSos,
         acknowledgeSos,
         orders,
+        getNotifications,
+        markNotificationAsRead,
+        clearNotifications,
       }}
     >
       {children}
