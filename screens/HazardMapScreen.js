@@ -32,13 +32,7 @@ export default function HazardMapScreen({ onBack }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.hazardsContent}>
-         {/* Placeholder for the actual Hazard Map */}
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={40} color="#fcd34d" />
-          <Text style={styles.mapText}>[Map View Placeholder: Hazard Zones]</Text>
-        </View>
-
-        {/* Hazard List */}
+         {/* Hazard List */}
         <Text style={styles.listTitle}>Hazard Alerts</Text>
         {hazards.map((h) => (
           <View

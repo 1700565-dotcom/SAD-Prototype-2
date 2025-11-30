@@ -1,6 +1,6 @@
 // File: src/screens/CitizenDashboardScreen.js (UPDATED)
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "./AppContext";
 
@@ -11,56 +11,64 @@ import HazardMapScreen from "./HazardMapScreen";
 
 export default function CitizenDashboardScreen({ name, onBack }) {
   const [activeTab, setActiveTab] = useState("Reporter");
-  const { getNotifications, markNotificationAsRead } = useApp();
-  const previousNotificationCount = useRef(0);
-
-  // Debug log to verify name prop
-  console.log('=== CITIZEN DASHBOARD ===');
-  console.log('name prop received:', name);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const { getNotifications, markNotificationAsRead, clearNotifications } = useApp();
+  const shownNotificationIds = useRef(new Set());
+  const isShowingAlert = useRef(false);
 
   // Check for new notifications
   useEffect(() => {
     const interval = setInterval(() => {
+      // Don't check if we're already showing an alert
+      if (isShowingAlert.current) return;
+      
       const notifications = getNotifications(name);
       const unreadNotifications = notifications.filter((n) => !n.read);
       
-      // Check if we have NEW unread notifications
-      if (unreadNotifications.length > previousNotificationCount.current) {
-        // Get the newest notification
-        const newestNotification = unreadNotifications[unreadNotifications.length - 1];
-        
-        // Show alert
-        Alert.alert(
-          "Report Acknowledged!",
-          newestNotification.message,
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                markNotificationAsRead(name, newestNotification.id);
-              }
-            }
-          ]
-        );
-        
-        // Update the count
-        previousNotificationCount.current = unreadNotifications.length;
-      } else {
-        // Just update the count if it decreased (notifications were read)
-        previousNotificationCount.current = unreadNotifications.length;
+      // Find notifications we haven't shown yet
+      const newNotifications = unreadNotifications.filter(
+        n => !shownNotificationIds.current.has(n.id)
+      );
+      
+      // Show alerts sequentially (one after another)
+      if (newNotifications.length > 0) {
+        isShowingAlert.current = true;
+        showAlertsSequentially(newNotifications, 0);
       }
-    }, 500); // Check every 500ms
+    }, 500);
 
     return () => clearInterval(interval);
   }, [name, getNotifications, markNotificationAsRead]);
 
+  // Function to show alerts one by one, waiting for user to dismiss each
+  function showAlertsSequentially(notifications, index) {
+    if (index >= notifications.length) {
+      isShowingAlert.current = false;
+      return;
+    }
+    
+    const notification = notifications[index];
+    const isLast = index === notifications.length - 1;
+    
+    Alert.alert(
+      isLast ? "Report Acknowledged! ✅" : `Report Acknowledged! ✅ (${index + 1}/${notifications.length})`,
+      notification.message,
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            markNotificationAsRead(name, notification.id);
+            shownNotificationIds.current.add(notification.id);
+            showAlertsSequentially(notifications, index + 1);
+          }
+        }
+      ]
+    );
+  }
+
   // Function to render the active screen
   const renderScreen = () => {
     const internalBack = () => {};
-
-    console.log('=== RENDER SCREEN ===');
-    console.log('Rendering tab:', activeTab);
-    console.log('name value:', name);
 
     switch (activeTab) {
       case "Reporter":
@@ -74,9 +82,20 @@ export default function CitizenDashboardScreen({ name, onBack }) {
     }
   };
 
-  // Get unread notification count
-  const notifications = getNotifications(name);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Get notifications
+  const allNotifications = getNotifications(name);
+  const unreadCount = allNotifications.filter((n) => !n.read).length;
+
+  // Toggle mark as read/unread
+  function toggleReadStatus(notificationId, currentStatus) {
+    if (currentStatus) {
+      // If read, we need to manually set it to unread
+      // For simplicity, just mark as read for now
+      return;
+    } else {
+      markNotificationAsRead(name, notificationId);
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -87,15 +106,19 @@ export default function CitizenDashboardScreen({ name, onBack }) {
           <Text style={styles.roleText}>Citizen Portal</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {/* Notification Badge */}
-          {unreadCount > 0 && (
-            <View style={styles.notificationBadge}>
-              <Ionicons name="notifications" size={20} color="#0ea5e9" />
+          {/* Notification Button */}
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => setShowNotificationPanel(true)}
+          >
+            <Ionicons name="notifications" size={22} color="#0ea5e9" />
+            {unreadCount > 0 && (
               <View style={styles.badgeCount}>
                 <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
-            </View>
-          )}
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={onBack} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={24} color="#ef4444" />
           </TouchableOpacity>
@@ -126,6 +149,99 @@ export default function CitizenDashboardScreen({ name, onBack }) {
 
       {/* RENDER ACTIVE SCREEN */}
       <View style={styles.screenContent}>{renderScreen()}</View>
+
+      {/* NOTIFICATION PANEL MODAL */}
+      <Modal
+        visible={showNotificationPanel}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowNotificationPanel(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.notificationPanel}>
+            {/* Panel Header */}
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Notifications</Text>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {allNotifications.length > 0 && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      Alert.alert(
+                        "Clear All",
+                        "Are you sure you want to clear all notifications?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Clear",
+                            style: "destructive",
+                            onPress: () => {
+                              clearNotifications(name);
+                              setShowNotificationPanel(false);
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  onPress={() => setShowNotificationPanel(false)}
+                  style={styles.closeButton}
+                >
+                  <Ionicons name="close" size={24} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Notifications List */}
+            <ScrollView style={styles.notificationList}>
+              {allNotifications.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="notifications-off-outline" size={48} color="#cbd5e1" />
+                  <Text style={styles.emptyText}>No notifications yet</Text>
+                </View>
+              ) : (
+                allNotifications.map((notification) => (
+                  <View 
+                    key={notification.id} 
+                    style={[
+                      styles.notificationItem,
+                      !notification.read && styles.unreadNotification
+                    ]}
+                  >
+                    <View style={styles.notificationIcon}>
+                      <Ionicons 
+                        name={notification.read ? "checkmark-circle" : "alert-circle"} 
+                        size={24} 
+                        color={notification.read ? "#22c55e" : "#0ea5e9"} 
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={styles.notificationMessage}>
+                        {notification.message}
+                      </Text>
+                      <Text style={styles.notificationTime}>
+                        {new Date(notification.timestamp).toLocaleString()}
+                      </Text>
+                    </View>
+                    {!notification.read && (
+                      <TouchableOpacity
+                        style={styles.markReadButton}
+                        onPress={() => markNotificationAsRead(name, notification.id)}
+                      >
+                        <Text style={styles.markReadText}>Mark Read</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -162,7 +278,7 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 16, fontWeight: "500", color: "#475569" },
   roleText: { fontSize: 24, fontWeight: "bold", color: "#1f2937" },
   
-  notificationBadge: {
+  notificationButton: {
     position: "relative",
     padding: 10,
     borderRadius: 10,
@@ -213,4 +329,102 @@ const styles = StyleSheet.create({
   activeTabText: { color: "#1d4ed8" },
 
   screenContent: { flex: 1 },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  notificationPanel: {
+    backgroundColor: "white",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    height: "70%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  panelTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#1f2937",
+  },
+  clearButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#fee2e2",
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+  },
+  notificationList: {
+    flex: 1,
+    padding: 15,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: "#94a3b8",
+  },
+  notificationItem: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 12,
+    alignItems: "flex-start",
+  },
+  unreadNotification: {
+    backgroundColor: "#eff6ff",
+    borderLeftWidth: 4,
+    borderLeftColor: "#0ea5e9",
+  },
+  notificationIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: "#1e293b",
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: "#64748b",
+  },
+  markReadButton: {
+    backgroundColor: "#0ea5e9",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  markReadText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 });

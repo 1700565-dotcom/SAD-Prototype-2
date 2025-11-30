@@ -53,12 +53,6 @@ export default function SafeRouteMapScreen({ onBack }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.sheltersContent}>
-        {/* Placeholder for the actual Safe Route Map */}
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={40} color="#93c5fd" />
-          <Text style={styles.mapText}>[Map View Placeholder: Safe Route to Shelter]</Text>
-        </View>
-
         {/* Shelter List */}
         <Text style={styles.listTitle}>Available Shelters & Capacity</Text>
         {shelters.map((item) => {
