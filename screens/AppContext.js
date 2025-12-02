@@ -12,10 +12,16 @@ export function useApp() {
 const genId = () => `id-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
 export function AppProvider({ children }) {
-  // Users now include a role
+  // Users now include a role and additional info
   const [users, setUsers] = useState([
     // Default admin account
-    { name: 'admin', password: 'admin123', role: 'admin' },
+    { 
+      name: 'admin', 
+      email: 'admin@cdrrmo.gov.ph',
+      contactNumber: '09123456789',
+      password: 'admin123', 
+      role: 'admin' 
+    },
   ]);
 
   // SOS + Orders
@@ -55,11 +61,20 @@ export function AppProvider({ children }) {
   }, []);
 
   // SIGN UP — default role is citizen
-  function signUp({ name, password }) {
+  function signUp({ name, email, contactNumber, password }) {
     if (users.find((u) => u.name === name))
-      return { ok: false, error: 'User already exists' };
+      return { ok: false, error: 'Username already exists' };
+    
+    if (users.find((u) => u.email === email))
+      return { ok: false, error: 'Email already registered' };
 
-    const newUser = { name, password, role: 'citizen' };
+    const newUser = { 
+      name, 
+      email,
+      contactNumber,
+      password, 
+      role: 'citizen' 
+    };
     setUsers((p) => [newUser, ...p]);
 
     return { ok: true };
